@@ -232,9 +232,12 @@ namespace RHCLib
 
             #region Recursively spawn children
 
-            foreach (Sphere<L> child in this.Children)
+            if (lstVectorsInSphere.Any())
             {
-                lstSpawn.AddRange(child.Spawn(lstVectorsInSphere, measure));
+                foreach (Sphere<L> child in this.Children)
+                {
+                    lstSpawn.AddRange(child.Spawn(lstVectorsInSphere, measure));
+                }
             }
 
             #endregion
