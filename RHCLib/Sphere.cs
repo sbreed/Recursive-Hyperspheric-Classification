@@ -339,7 +339,7 @@ namespace RHCLib
                     lstSpawn.AddRange(child.SpawnSingular(lvector, measure));
                 }
 
-                if (!this.Label.Equals(lvector.Label) && !Vector.EqualsEx(this, lvector))
+                if (!this.Label.Equals(lvector.Label) && !Vector.EqualsEx(this, lvector) && !this.DoesAtLeastOneChildEncloseVector(lvector, measure))
                 {
                     Sphere<L> child = new Sphere<L>(this.Radius - measure(this, lvector), lvector);
                     this.AddChild(child);
@@ -361,7 +361,7 @@ namespace RHCLib
                     lstSpawn.AddRange(child.SpawnSingularByExploding(lvector, measure));
                 }
 
-                if (!this.Label.Equals(lvector.Label) && !Vector.EqualsEx(this, lvector))
+                if (!this.Label.Equals(lvector.Label) && !Vector.EqualsEx(this, lvector) && !this.DoesAtLeastOneChildEncloseVector(lvector, measure))
                 {
                     Sphere<L> sphereClosest = (from s in this.Children.Concat(Enumerable.Repeat(this, 1))
                                                orderby measure(lvector, s)
@@ -375,6 +375,11 @@ namespace RHCLib
             }
 
             return lstSpawn;
+        }
+
+        public bool DoesAtLeastOneChildEncloseVector(IVector vector, DistanceDelegate measure)
+        {
+            return this.Children.Any(c => c.DoesEncloseVector(vector, measure));
         }
 
         public IEnumerable<Sphere<L>> Children
