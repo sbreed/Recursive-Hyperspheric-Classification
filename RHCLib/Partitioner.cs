@@ -7,6 +7,8 @@ namespace RHCLib
 {
     public static class Partitioner
     {
+        private static readonly Random s_rand = new Random(Guid.NewGuid().GetHashCode());
+
         public static void Partition<T>(IList<T> lstSource, int nFirstPartitionCount, out IList<T> lstFirstPartition, out IList<T> lstSecondPartition)
         {
             Partitioner.Partition<T>(lstSource, 0, nFirstPartitionCount, out lstFirstPartition, out lstSecondPartition);
@@ -92,12 +94,11 @@ namespace RHCLib
                     lstSecondPartition = new List<T>();
 
                     List<T> lstDupSource = new List<T>(lstSource);
-                    Random rand = new Random();
                     int nIndex;
 
                     while (lstFirstPartition.Count < nFirstPartitionCount)
                     {
-                        lstFirstPartition.Add(lstDupSource[(nIndex = rand.Next(0, lstDupSource.Count))]);
+                        lstFirstPartition.Add(lstDupSource[(nIndex = Partitioner.s_rand.Next(0, lstDupSource.Count))]);
                         lstDupSource.RemoveAt(nIndex);
                     }
 

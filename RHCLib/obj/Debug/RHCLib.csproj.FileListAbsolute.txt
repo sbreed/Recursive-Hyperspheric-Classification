@@ -1,0 +1,5 @@
+C:\Users\sbree\Desktop\RHCMod\RHCLib\bin\Debug\RHCLib.dll
+C:\Users\sbree\Desktop\RHCMod\RHCLib\bin\Debug\RHCLib.pdb
+C:\Users\sbree\Desktop\RHCMod\RHCLib\obj\Debug\RHCLib.csprojResolveAssemblyReference.cache
+C:\Users\sbree\Desktop\RHCMod\RHCLib\obj\Debug\RHCLib.dll
+C:\Users\sbree\Desktop\RHCMod\RHCLib\obj\Debug\RHCLib.pdb

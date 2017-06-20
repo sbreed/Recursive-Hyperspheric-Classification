@@ -8,6 +8,7 @@ namespace RHCLib
     public class Sphere<L> : LabeledVector<L>
     {
         private readonly List<Sphere<L>> m_lstChildren = new List<Sphere<L>>();
+        private Discriminant<L> m_discriminant = null;
 
         public Sphere(double fRadius, L label, IEnumerable<double> features)
             : base(label, features)
@@ -73,7 +74,7 @@ namespace RHCLib
                                      where !Vector.EqualsEx(centroid, v)
                                      orderby measure(centroid, v)
                                      select v).FirstOrDefault();
-            
+
             return vectorClosest != null ? new Sphere<L>(measure(centroid, vectorClosest) / 2, label, centroid) : null;
         }
 
@@ -88,7 +89,7 @@ namespace RHCLib
         {
             Vector centroid = Vector.Centroid(vectorsForCentroid);
             LabeledVector<L> vectorSameLabel = Sorter.RadialSort(vectorsForCentroid.Cast<IVector>(), centroid, measure, Sorter.SortType.GreatestDistanceFirst).First() as LabeledVector<L>;
-            
+
             IEnumerable<LabeledVector<L>> vectorsDifferentLabel = LabeledVector<L>.GetVectorsWithoutLabel(vectorsAll, label);
             IVector vectorDifferentLabel = (from v in vectorsDifferentLabel
                                             where measure(centroid, v) > measure(centroid, vectorSameLabel)
@@ -210,13 +211,20 @@ namespace RHCLib
 
             if (this.DoesEncloseVector(vector, measure))
             {
-                sphereMinRadius = this;
-                Sphere<L> sphereCandidate = null;
-                foreach (Sphere<L> child in this.Children)
+                if (this.m_discriminant != null)
                 {
-                    if ((sphereCandidate = child.Recognize(vector, measure)) != null && sphereCandidate.Radius < sphereMinRadius.Radius)
+                    sphereMinRadius = this.m_discriminant.CreatePseudoSphere(vector);
+                }
+                else
+                {
+                    sphereMinRadius = this;
+                    Sphere<L> sphereCandidate = null;
+                    foreach (Sphere<L> child in this.Children)
                     {
-                        sphereMinRadius = sphereCandidate;
+                        if ((sphereCandidate = child.Recognize(vector, measure)) != null && sphereCandidate.Radius < sphereMinRadius.Radius)
+                        {
+                            sphereMinRadius = sphereCandidate;
+                        }
                     }
                 }
             }
@@ -224,7 +232,8 @@ namespace RHCLib
             return sphereMinRadius;
         }
 
-        public virtual IEnumerable<Sphere<L>> Spawn(IEnumerable<LabeledVector<L>> vectors, DistanceDelegate measure)
+        [Obsolete]
+        protected virtual IEnumerable<Sphere<L>> Spawn_Old(IEnumerable<LabeledVector<L>> vectors, DistanceDelegate measure)
         {
             List<Sphere<L>> lstSpawn = new List<Sphere<L>>();
 
@@ -236,7 +245,7 @@ namespace RHCLib
             {
                 foreach (Sphere<L> child in this.Children)
                 {
-                    lstSpawn.AddRange(child.Spawn(lstVectorsInSphere, measure));
+                    lstSpawn.AddRange(child.Spawn_Old(lstVectorsInSphere, measure));
                 }
             }
 
@@ -276,7 +285,8 @@ namespace RHCLib
             return lstSpawn;
         }
 
-        public virtual IEnumerable<Sphere<L>> SpawnByExploding(IEnumerable<LabeledVector<L>> vectors, DistanceDelegate measure)
+        [Obsolete]
+        protected virtual IEnumerable<Sphere<L>> SpawnByExploding(IEnumerable<LabeledVector<L>> vectors, DistanceDelegate measure)
         {
             List<Sphere<L>> lstSpawn = new List<Sphere<L>>();
 
@@ -303,8 +313,8 @@ namespace RHCLib
                     Vector vectorCentroid = Vector.Centroid(kvp.Value.Cast<IVector>().ToList());
 
                     Sphere<L> sphereClosest = (from s in this.Children.Concat(Enumerable.Repeat(this, 1))
-                                                    orderby measure(vectorCentroid, s)
-                                                    select s).First();
+                                               orderby measure(vectorCentroid, s)
+                                               select s).First();
 
                     Sphere<L> child = new Sphere<L>(sphereClosest != this ? measure(vectorCentroid, sphereClosest) : this.Radius - measure(this, vectorCentroid), kvp.Key, (IVector)vectorCentroid);
                     if (child.DoesEncloseAll(lstVectorsInSphere.Cast<IVector>(), measure) || !child.DoesEncloseAny(kvp.Value.Cast<IVector>(), measure))
@@ -328,7 +338,8 @@ namespace RHCLib
             return lstSpawn;
         }
 
-        public virtual IEnumerable<Sphere<L>> SpawnSingular(LabeledVector<L> lvector, DistanceDelegate measure)
+        [Obsolete]
+        protected virtual IEnumerable<Sphere<L>> SpawnSingular(LabeledVector<L> lvector, DistanceDelegate measure)
         {
             List<Sphere<L>> lstSpawn = new List<Sphere<L>>();
 
@@ -350,7 +361,8 @@ namespace RHCLib
             return lstSpawn;
         }
 
-        public virtual IEnumerable<Sphere<L>> SpawnSingularByExploding(LabeledVector<L> lvector, DistanceDelegate measure)
+        [Obsolete]
+        protected virtual IEnumerable<Sphere<L>> SpawnSingularByExploding(LabeledVector<L> lvector, DistanceDelegate measure)
         {
             List<Sphere<L>> lstSpawn = new List<Sphere<L>>();
 
@@ -375,6 +387,339 @@ namespace RHCLib
             }
 
             return lstSpawn;
+        }
+
+        public virtual int Spawn(IEnumerable<LabeledVector<L>> vectors, DistanceDelegate measure, ChildDoesNotEncloseAnyStrategy strategy)
+        {
+            int count = 0;
+
+            List<LabeledVector<L>> lstVectorsInSphere = this.GetVectorsInSphere(vectors.Cast<IVector>(), measure).Cast<LabeledVector<L>>().ToList();
+
+            #region Recursively spawn children
+
+            if (lstVectorsInSphere.Any())
+            {
+                foreach (Sphere<L> child in this.Children)
+                {
+                    count += child.Spawn(lstVectorsInSphere, measure, strategy);
+                }
+            }
+
+            #endregion
+
+            List<LabeledVector<L>> lstVectorsNotInChildren = this.GetVectorsNotInChildren(lstVectorsInSphere.Cast<IVector>(), measure).Cast<LabeledVector<L>>().ToList();
+            IDictionary<L, IEnumerable<LabeledVector<L>>> dictVectorsNotInChildren = LabeledVector<L>.SeparateIntoClasses(lstVectorsNotInChildren);
+
+            foreach (KeyValuePair<L, IEnumerable<LabeledVector<L>>> kvp in dictVectorsNotInChildren)
+            {
+                if (!kvp.Key.Equals(this.Label))
+                {
+                    Vector vectorCentroid = Vector.Centroid(kvp.Value.Cast<IVector>().ToList());
+
+                    Sphere<L> child = new Sphere<L>(this.Radius - measure(this, vectorCentroid), kvp.Key, (IVector)vectorCentroid);
+
+                    #region Always check for enclosing at least one vector from creation set
+
+                    if (!child.DoesEncloseAny(kvp.Value, measure))  // We could probably extend this to also check !child.DoesEncloseAny(vectors, measure)
+                    {
+                        switch (strategy)
+                        {
+                            case ChildDoesNotEncloseAnyStrategy.ClosestVectorSpawns:
+                                LabeledVector<L> closest = kvp.Value.OrderBy(v => measure(this, v)).First();
+                                child = new Sphere<L>(this.Radius - measure(this, closest), kvp.Key, (IVector)closest);
+                                break;
+                            case ChildDoesNotEncloseAnyStrategy.FurthestVectorSpawns:
+                                LabeledVector<L> furthest = kvp.Value.OrderByDescending(v => measure(this, v)).First();
+                                child = new Sphere<L>(this.Radius - measure(this, furthest), kvp.Key, (IVector)furthest);
+                                break;
+                            case ChildDoesNotEncloseAnyStrategy.RandomVectorSpawns:
+                                LabeledVector<L> randomVector = kvp.Value.ElementAt(new Random().Next(kvp.Value.Count()));
+                                child = new Sphere<L>(this.Radius - measure(this, randomVector), kvp.Key, (IVector)randomVector);
+                                break;
+                            default:
+                                throw new NotImplementedException();
+                        }
+                    }
+
+                    #endregion
+
+                    #region Check if child encloses all vectors in the sphere.  If it does, the child is not very descriptive, so we need to create a new one
+
+                    if (child.DoesEncloseAll(lstVectorsInSphere, measure))
+                    {
+                        LabeledVector<L> furthest = kvp.Value.OrderByDescending(v => measure(this, v)).First();
+                        child = new Sphere<L>(this.Radius - measure(this, furthest), kvp.Key, (IVector)furthest);
+                        if (child.DoesEncloseAll(lstVectorsInSphere, measure))
+                        {
+                            #region If the child encloses all again, let's do a midpoint rule
+
+                            child = Sphere<L>.CreateSphereCenteredOnVectorAndMidwayDistanceBetweenClosestVector(furthest, lstVectorsInSphere.Cast<IVector>(), kvp.Key, measure);
+
+                            #endregion
+                        }
+                    }
+
+                    #endregion
+
+                    if (!Vector.EqualsEx(this, child))
+                    {
+                        this.AddChild(child);
+                        count++;
+                    }
+                    else
+                    {
+                        //throw new Exception("Can't have the centroid of the parent be the same as the child.");
+                    }
+                }
+            }
+
+            return count;
+        }
+
+        public virtual int SpawnWithLDA(IEnumerable<LabeledVector<L>> vectors, DistanceDelegate measure, ChildDoesNotEncloseAnyStrategy strategy)
+        {
+            int count = 0;
+
+            List<LabeledVector<L>> lstVectorsInSphere = this.GetVectorsInSphere(vectors.Cast<IVector>(), measure).Cast<LabeledVector<L>>().ToList();
+
+            #region Recursively spawn children
+
+            if (lstVectorsInSphere.Any())
+            {
+                foreach (Sphere<L> child in this.Children)
+                {
+                    count += child.SpawnWithLDA(lstVectorsInSphere, measure, strategy);
+                }
+            }
+
+            #endregion
+
+            List<LabeledVector<L>> lstVectorsNotInChildren = this.GetVectorsNotInChildren(lstVectorsInSphere.Cast<IVector>(), measure).Cast<LabeledVector<L>>().ToList();
+            IDictionary<L, IEnumerable<LabeledVector<L>>> dictVectorsNotInChildren = LabeledVector<L>.SeparateIntoClasses(lstVectorsNotInChildren);
+
+            if (dictVectorsNotInChildren.Count == 2 && this.m_discriminant == null)
+            {
+                #region Try to Create Discriminant if the space is completely separable
+
+                Discriminant<L> discriminant;
+                try
+                {
+                    if (LDA.IsCompletelySeparatedWithDiscriminant(dictVectorsNotInChildren.ElementAt(0).Value, dictVectorsNotInChildren.ElementAt(1).Value, this, out discriminant))
+                    {
+                        this.m_discriminant = discriminant;
+                    }
+                }
+                catch
+                {
+                    // Just consume; it may not be able to compute the inverse of the scatter-within matrix.
+                }
+
+                #endregion
+            }
+
+            if (this.m_discriminant == null)
+            {
+                #region Spawn Regularly
+
+                foreach (KeyValuePair<L, IEnumerable<LabeledVector<L>>> kvp in dictVectorsNotInChildren)
+                {
+                    if (!kvp.Key.Equals(this.Label))
+                    {
+                        Vector vectorCentroid = Vector.Centroid(kvp.Value.Cast<IVector>().ToList());
+
+                        Sphere<L> child = new Sphere<L>(this.Radius - measure(this, vectorCentroid), kvp.Key, (IVector)vectorCentroid);
+
+                        #region Always check for enclosing at least one vector from creation set
+
+                        if (!child.DoesEncloseAny(kvp.Value, measure))  // We could probably extend this to also check !child.DoesEncloseAny(vectors, measure)
+                        {
+                            switch (strategy)
+                            {
+                                case ChildDoesNotEncloseAnyStrategy.ClosestVectorSpawns:
+                                    LabeledVector<L> closest = kvp.Value.OrderBy(v => measure(this, v)).First();
+                                    child = new Sphere<L>(this.Radius - measure(this, closest), kvp.Key, (IVector)closest);
+                                    break;
+                                case ChildDoesNotEncloseAnyStrategy.FurthestVectorSpawns:
+                                    LabeledVector<L> furthest = kvp.Value.OrderByDescending(v => measure(this, v)).First();
+                                    child = new Sphere<L>(this.Radius - measure(this, furthest), kvp.Key, (IVector)furthest);
+                                    break;
+                                case ChildDoesNotEncloseAnyStrategy.RandomVectorSpawns:
+                                    LabeledVector<L> randomVector = kvp.Value.ElementAt(new Random().Next(kvp.Value.Count()));
+                                    child = new Sphere<L>(this.Radius - measure(this, randomVector), kvp.Key, (IVector)randomVector);
+                                    break;
+                                default:
+                                    throw new NotImplementedException();
+                            }
+                        }
+
+                        #endregion
+
+                        if (!Vector.EqualsEx(this, child))
+                        {
+                            this.AddChild(child);
+                            count++;
+                        }
+                        else
+                        {
+                            //throw new Exception("Can't have the centroid of the parent be the same as the child.");
+                        }
+                    }
+                }
+
+                #endregion
+            }
+
+            return count;
+        }
+
+        public virtual int SpawnMinimally(IEnumerable<LabeledVector<L>> vectors, DistanceDelegate measure, ChildDoesNotEncloseAnyStrategy strategy)
+        {
+            int count = 0;
+
+            List<LabeledVector<L>> lstVectorsInSphere = this.GetVectorsInSphere(vectors.Cast<IVector>(), measure).Cast<LabeledVector<L>>().ToList();
+
+            #region Recursively spawn children
+
+            if (lstVectorsInSphere.Any())
+            {
+                foreach (Sphere<L> child in this.Children)
+                {
+                    count += child.SpawnMinimally(lstVectorsInSphere, measure, strategy);
+                }
+            }
+
+            #endregion
+
+            List<LabeledVector<L>> lstVectorsNotInChildren = this.GetVectorsNotInChildren(lstVectorsInSphere.Cast<IVector>(), measure).Cast<LabeledVector<L>>().ToList();
+            IDictionary<L, IEnumerable<LabeledVector<L>>> dictVectorsNotInChildren = LabeledVector<L>.SeparateIntoClasses(lstVectorsNotInChildren);
+
+            foreach (KeyValuePair<L, IEnumerable<LabeledVector<L>>> kvp in dictVectorsNotInChildren)
+            {
+                if (!kvp.Key.Equals(this.Label))
+                {
+                    Vector vectorCentroid = Vector.Centroid(kvp.Value.Cast<IVector>().ToList());
+                    double a = measure(this, vectorCentroid);
+
+                    double radius;
+                    if (a < 2.0 * this.Radius / 5.0)
+                    {
+                        radius = a + (a / 2);
+                    }
+                    else
+                    {
+                        radius = this.Radius - a;
+                    }
+
+                    Sphere<L> child = new Sphere<L>(radius, kvp.Key, (IVector)vectorCentroid);
+
+                    #region Always check for enclosing at least one vector from creation set
+
+                    if (!child.DoesEncloseAny(kvp.Value, measure))  // We could probably extend this to also check !child.DoesEncloseAny(vectors, measure)
+                    {
+                        switch (strategy)
+                        {
+                            case ChildDoesNotEncloseAnyStrategy.ClosestVectorSpawns:
+                                LabeledVector<L> closest = kvp.Value.OrderBy(v => measure(this, v)).First();
+                                child = new Sphere<L>(this.Radius - measure(this, closest), kvp.Key, (IVector)closest);
+                                break;
+                            case ChildDoesNotEncloseAnyStrategy.FurthestVectorSpawns:
+                                LabeledVector<L> furthest = kvp.Value.OrderByDescending(v => measure(this, v)).First();
+                                child = new Sphere<L>(this.Radius - measure(this, furthest), kvp.Key, (IVector)furthest);
+                                break;
+                            case ChildDoesNotEncloseAnyStrategy.RandomVectorSpawns:
+                                LabeledVector<L> randomVector = kvp.Value.ElementAt(new Random().Next(kvp.Value.Count()));
+                                child = new Sphere<L>(this.Radius - measure(this, randomVector), kvp.Key, (IVector)randomVector);
+                                break;
+                            default:
+                                throw new NotImplementedException();
+                        }
+                    }
+
+                    #endregion
+
+                    if (!Vector.EqualsEx(this, child))
+                    {
+                        this.AddChild(child);
+                        count++;
+                    }
+                    else
+                    {
+                        //throw new Exception("Can't have the centroid of the parent be the same as the child.");
+                    }
+                }
+            }
+
+            return count;
+        }
+
+        public virtual int SpawnMinimallyUsingDifferentLabel(IEnumerable<LabeledVector<L>> vectors, DistanceDelegate measure, ChildDoesNotEncloseAnyStrategy strategy)
+        {
+            int count = 0;
+
+            List<LabeledVector<L>> lstVectorsInSphere = this.GetVectorsInSphere(vectors.Cast<IVector>(), measure).Cast<LabeledVector<L>>().ToList();
+
+            #region Recursively spawn children
+
+            if (lstVectorsInSphere.Any())
+            {
+                foreach (Sphere<L> child in this.Children)
+                {
+                    count += child.SpawnMinimallyUsingDifferentLabel(lstVectorsInSphere, measure, strategy);
+                }
+            }
+
+            #endregion
+
+            List<LabeledVector<L>> lstVectorsNotInChildren = this.GetVectorsNotInChildren(lstVectorsInSphere.Cast<IVector>(), measure).Cast<LabeledVector<L>>().ToList();
+            IDictionary<L, IEnumerable<LabeledVector<L>>> dictVectorsNotInChildren = LabeledVector<L>.SeparateIntoClasses(lstVectorsNotInChildren);
+
+            foreach (KeyValuePair<L, IEnumerable<LabeledVector<L>>> kvp in dictVectorsNotInChildren)
+            {
+                if (!kvp.Key.Equals(this.Label))
+                {
+                    Vector vectorCentroid = Vector.Centroid(kvp.Value.Cast<IVector>().ToList());
+                    LabeledVector<L> vectorClosestWithDifferentLabel = vectors.Where(v => !v.Label.Equals(kvp.Key)).OrderBy(v => measure(vectorCentroid, v)).First();
+
+                    Sphere<L> child = new Sphere<L>(measure(vectorCentroid, vectorClosestWithDifferentLabel) / 2.0, kvp.Key, (IVector)vectorCentroid);
+
+                    #region Always check for enclosing at least one vector from creation set
+
+                    if (!child.DoesEncloseAny(kvp.Value, measure))  // We could probably extend this to also check !child.DoesEncloseAny(vectors, measure)
+                    {
+                        switch (strategy)
+                        {
+                            case ChildDoesNotEncloseAnyStrategy.ClosestVectorSpawns:
+                                LabeledVector<L> closest = kvp.Value.OrderBy(v => measure(this, v)).First();
+                                child = new Sphere<L>(this.Radius - measure(this, closest), kvp.Key, (IVector)closest);
+                                break;
+                            case ChildDoesNotEncloseAnyStrategy.FurthestVectorSpawns:
+                                LabeledVector<L> furthest = kvp.Value.OrderByDescending(v => measure(this, v)).First();
+                                child = new Sphere<L>(this.Radius - measure(this, furthest), kvp.Key, (IVector)furthest);
+                                break;
+                            case ChildDoesNotEncloseAnyStrategy.RandomVectorSpawns:
+                                LabeledVector<L> randomVector = kvp.Value.ElementAt(new Random().Next(kvp.Value.Count()));
+                                child = new Sphere<L>(this.Radius - measure(this, randomVector), kvp.Key, (IVector)randomVector);
+                                break;
+                            default:
+                                throw new NotImplementedException();
+                        }
+                    }
+
+                    #endregion
+
+                    if (!Vector.EqualsEx(this, child))
+                    {
+                        this.AddChild(child);
+                        count++;
+                    }
+                    else
+                    {
+                        //throw new Exception("Can't have the centroid of the parent be the same as the child.");
+                    }
+                }
+            }
+
+            return count;
         }
 
         public bool DoesAtLeastOneChildEncloseVector(IVector vector, DistanceDelegate measure)
@@ -423,6 +768,110 @@ namespace RHCLib
                     nCount += child.SphereCount;
                 }
                 return nCount;
+            }
+        }
+    }
+
+    public enum ChildDoesNotEncloseAnyStrategy
+    {
+        FurthestVectorSpawns,
+        ClosestVectorSpawns,
+        RandomVectorSpawns
+    }
+
+    public enum EncapsulateAllStrategy
+    {
+        None,
+        FurthestVectorBecomesCentroid,
+        LeaveFurthestVectorOut,
+        DivideRadiusInHalf
+    }
+
+    public class Discriminant<L>
+    {
+        private readonly double[][] m_discriminantTransposed;
+        private readonly double m_fDecisionPoint;
+        private readonly L m_classLabelLeftOfMidpoint;
+        private readonly L m_classLabelRightOfMidpoint;
+        private readonly Sphere<L> m_parent;
+
+        public Discriminant(double[][] discriminant, double decisionPoint, L classLabelLeftOfMidpoint, L classLabelRightOfMidpoint, Sphere<L> parent)
+        {
+            this.m_discriminantTransposed = LDA.MatrixTranspose(discriminant);
+            this.m_fDecisionPoint = decisionPoint;
+            this.m_classLabelLeftOfMidpoint = classLabelLeftOfMidpoint;
+            this.m_classLabelRightOfMidpoint = classLabelRightOfMidpoint;
+            this.m_parent = parent;
+        }
+
+        public virtual L Classify(IVector vector)
+        {
+            return this.CreatePseudoSphere(vector).Label;
+        }
+
+        public virtual Sphere<L> CreatePseudoSphere(IVector vector)
+        {
+            double[][] data = LDA.MatrixFromVector(vector.Features);
+            double[][] centroid = LDA.MatrixFromVector(this.Parent.Features);
+
+            double[][] wTx = LDA.MatrixProduct(this.m_discriminantTransposed, data);    // Project the data
+            double[][] wTcentroid = LDA.MatrixProduct(this.m_discriminantTransposed, centroid);
+
+            if (wTx[0][0] <= this.DecisionPoint)
+            {
+                // Should be the ClassLabelLeft label
+
+                // Graphical Example:
+                //
+                //      |-------X--------+----------------|       X => Decision point calculated by LDA,     + => Centroid of Sphere
+                //      |-------|                                 <-- If a point falls left of the decision point, I need the segment between | and X.  Remember to divide by 2.0 because it should be a radius.
+                //          ^
+                //          |
+                //      Remember to divide by two as it's a radius
+
+                double farLeft = wTcentroid[0][0] - this.Parent.Radius;
+
+                return new Sphere<L>((this.DecisionPoint - farLeft) / 2.0, this.ClassLabelLeft, vector);
+            }
+            else
+            {
+                // Should be the ClassLabelRight label
+
+                double farRight = wTcentroid[0][0] + this.Parent.Radius;
+
+                return new Sphere<L>((farRight - this.DecisionPoint) / 2.0, this.ClassLabelRight, vector);
+            }
+        }
+
+        public virtual L ClassLabelLeft
+        {
+            get
+            {
+                return this.m_classLabelLeftOfMidpoint;
+            }
+        }
+
+        public virtual L ClassLabelRight
+        {
+            get
+            {
+                return this.m_classLabelRightOfMidpoint;
+            }
+        }
+
+        public virtual double DecisionPoint
+        {
+            get
+            {
+                return this.m_fDecisionPoint;
+            }
+        }
+
+        public virtual Sphere<L> Parent
+        {
+            get
+            {
+                return this.m_parent;
             }
         }
     }

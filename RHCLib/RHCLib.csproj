@@ -41,14 +41,17 @@
     <!-- A reference to the entire .NET Framework is automatically included -->
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Exporter.cs" />
     <Compile Include="ExtensionMethods.cs" />
     <Compile Include="Importer.cs" />
     <Compile Include="IVector.cs" />
     <Compile Include="LabeledVector.cs" />
+    <Compile Include="LDA.cs" />
     <Compile Include="Minkowski.cs" />
     <Compile Include="Partitioner.cs" />
     <Compile Include="Sorter.cs" />
     <Compile Include="Sphere.cs" />
+    <Compile Include="Transformer.cs" />
     <Compile Include="Vector.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
