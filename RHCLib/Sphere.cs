@@ -476,7 +476,7 @@ namespace RHCLib
             return count;
         }
 
-        public virtual int SpawnWithLDA(IEnumerable<LabeledVector<L>> vectors, DistanceDelegate measure, ChildDoesNotEncloseAnyStrategy strategy)
+        public virtual int SpawnWithLDA(IEnumerable<LabeledVector<L>> vectors, DistanceDelegate measure, ChildDoesNotEncloseAnyStrategy strategy, LDAStrategy ldaStrategy)
         {
             int count = 0;
 
@@ -488,7 +488,7 @@ namespace RHCLib
             {
                 foreach (Sphere<L> child in this.Children)
                 {
-                    count += child.SpawnWithLDA(lstVectorsInSphere, measure, strategy);
+                    count += child.SpawnWithLDA(lstVectorsInSphere, measure, strategy, ldaStrategy);
                 }
             }
 
@@ -497,7 +497,7 @@ namespace RHCLib
             List<LabeledVector<L>> lstVectorsNotInChildren = this.GetVectorsNotInChildren(lstVectorsInSphere.Cast<IVector>(), measure).Cast<LabeledVector<L>>().ToList();
             IDictionary<L, IEnumerable<LabeledVector<L>>> dictVectorsNotInChildren = LabeledVector<L>.SeparateIntoClasses(lstVectorsNotInChildren);
 
-            if (dictVectorsNotInChildren.Count == 2 && this.m_discriminant == null)
+            if (dictVectorsNotInChildren.Count == 2 && this.m_discriminant == null && (ldaStrategy == LDAStrategy.AlwaysTryToApply || !this.Children.Any()))
             {
                 #region Try to Create Discriminant if the space is completely separable
 
@@ -777,6 +777,12 @@ namespace RHCLib
         FurthestVectorSpawns,
         ClosestVectorSpawns,
         RandomVectorSpawns
+    }
+
+    public enum LDAStrategy
+    {
+        OnlyApplyLDAIfNoChildren,
+        AlwaysTryToApply
     }
 
     public enum EncapsulateAllStrategy

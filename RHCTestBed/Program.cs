@@ -299,7 +299,10 @@ namespace RHCTestBed
 
                         using (System.IO.StreamReader sr = new System.IO.StreamReader(@".\Datasets\processed.cleveland.data"))
                         {
-                            rgEntireDataset = Importer.Import<double>(sr, 0, ",", Importer.ClassColumn.LastColumn, null, null, null, ClevelandHeartDiseaseConverter.LinePreprocessor);
+                            rgEntireDataset = Importer.Import<double>(sr, 0, ",", Importer.ClassColumn.LastColumn, null, null, null, new Importer.LinePreprocessorHandler(e =>
+                            {
+                                e.SkipLine = e.Line.Contains("?");
+                            }));
                         }
 
                         #endregion
@@ -485,7 +488,7 @@ namespace RHCTestBed
                             break;
                         case BenchmarkAlgorithm.LDASquaredEuclidean:
                         case BenchmarkAlgorithm.LDAEuclidean:
-                            spawnCount = sphere.SpawnWithLDA(lstTrain, measure, ChildDoesNotEncloseAnyStrategy.FurthestVectorSpawns);
+                            spawnCount = sphere.SpawnWithLDA(lstTrain, measure, ChildDoesNotEncloseAnyStrategy.FurthestVectorSpawns, LDAStrategy.OnlyApplyLDAIfNoChildren);
                             break;
                         case BenchmarkAlgorithm.DisjointMidpoint:
                             spawnCount = sphere.SpawnMinimally(lstTrain, measure, ChildDoesNotEncloseAnyStrategy.FurthestVectorSpawns);
