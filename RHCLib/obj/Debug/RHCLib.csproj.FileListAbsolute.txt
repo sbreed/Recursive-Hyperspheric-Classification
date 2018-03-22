@@ -7,3 +7,4 @@ C:\Users\sbree\Source\Repos\Recursive-Hyperspheric-Classification\RHCLib\bin\Deb
 C:\Users\sbree\Source\Repos\Recursive-Hyperspheric-Classification\RHCLib\bin\Debug\RHCLib.pdb
 C:\Users\sbree\Source\Repos\Recursive-Hyperspheric-Classification\RHCLib\obj\Debug\RHCLib.dll
 C:\Users\sbree\Source\Repos\Recursive-Hyperspheric-Classification\RHCLib\obj\Debug\RHCLib.pdb
+C:\Users\sbree\Source\Repos\Recursive-Hyperspheric-Classification\RHCLib\obj\Debug\RHCLib.csprojResolveAssemblyReference.cache

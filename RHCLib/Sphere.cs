@@ -389,7 +389,7 @@ namespace RHCLib
             return lstSpawn;
         }
 
-        public virtual int Spawn(IEnumerable<LabeledVector<L>> vectors, DistanceDelegate measure, ChildDoesNotEncloseAnyStrategy strategy)
+        public virtual int Spawn(IEnumerable<LabeledVector<L>> vectors, DistanceDelegate measure, ChildDoesNotEncloseAnyStrategy strategy, ParallelStrategy parallelStrategy)
         {
             int count = 0;
 
@@ -399,9 +399,25 @@ namespace RHCLib
 
             if (lstVectorsInSphere.Any())
             {
-                foreach (Sphere<L> child in this.Children)
+                if (parallelStrategy == ParallelStrategy.MultithreadedSpawn)
                 {
-                    count += child.Spawn(lstVectorsInSphere, measure, strategy);
+                    List<System.Threading.Tasks.Task> lstTasks = new List<System.Threading.Tasks.Task>();
+                    foreach (Sphere<L> child in this.Children)
+                    {
+                        lstTasks.Add(System.Threading.Tasks.Task.Factory.StartNew(() =>
+                        {
+                            count += child.Spawn(lstVectorsInSphere, measure, strategy, ParallelStrategy.SingleThreadSpawn);
+                        }, System.Threading.Tasks.TaskCreationOptions.LongRunning));
+                    }
+
+                    System.Threading.Tasks.Task.WaitAll(lstTasks.ToArray());
+                }
+                else
+                {
+                    foreach (Sphere<L> child in this.Children)
+                    {
+                        count += child.Spawn(lstVectorsInSphere, measure, strategy, parallelStrategy);
+                    }
                 }
             }
 
@@ -476,7 +492,7 @@ namespace RHCLib
             return count;
         }
 
-        public virtual int SpawnWithLDA(IEnumerable<LabeledVector<L>> vectors, DistanceDelegate measure, ChildDoesNotEncloseAnyStrategy strategy, LDAStrategy ldaStrategy)
+        public virtual int SpawnWithLDA(IEnumerable<LabeledVector<L>> vectors, DistanceDelegate measure, ChildDoesNotEncloseAnyStrategy strategy, LDAStrategy ldaStrategy, ParallelStrategy parallelStrategy)
         {
             int count = 0;
 
@@ -486,9 +502,25 @@ namespace RHCLib
 
             if (lstVectorsInSphere.Any())
             {
-                foreach (Sphere<L> child in this.Children)
+                if (parallelStrategy == ParallelStrategy.MultithreadedSpawn)
                 {
-                    count += child.SpawnWithLDA(lstVectorsInSphere, measure, strategy, ldaStrategy);
+                    List<System.Threading.Tasks.Task> lstTasks = new List<System.Threading.Tasks.Task>();
+                    foreach (Sphere<L> child in this.Children)
+                    {
+                        lstTasks.Add(System.Threading.Tasks.Task.Factory.StartNew(() =>
+                        {
+                            count += child.SpawnWithLDA(lstVectorsInSphere, measure, strategy, ldaStrategy, ParallelStrategy.SingleThreadSpawn);
+                        }, System.Threading.Tasks.TaskCreationOptions.LongRunning));
+                    }
+
+                    System.Threading.Tasks.Task.WaitAll(lstTasks.ToArray());
+                }
+                else
+                {
+                    foreach (Sphere<L> child in this.Children)
+                    {
+                        count += child.SpawnWithLDA(lstVectorsInSphere, measure, strategy, ldaStrategy, parallelStrategy);
+                    }
                 }
             }
 
@@ -572,7 +604,7 @@ namespace RHCLib
             return count;
         }
 
-        public virtual int SpawnMinimally(IEnumerable<LabeledVector<L>> vectors, DistanceDelegate measure, ChildDoesNotEncloseAnyStrategy strategy)
+        public virtual int SpawnMinimally(IEnumerable<LabeledVector<L>> vectors, DistanceDelegate measure, ChildDoesNotEncloseAnyStrategy strategy, ParallelStrategy parallelStrategy)
         {
             int count = 0;
 
@@ -582,9 +614,25 @@ namespace RHCLib
 
             if (lstVectorsInSphere.Any())
             {
-                foreach (Sphere<L> child in this.Children)
+                if (parallelStrategy == ParallelStrategy.MultithreadedSpawn)
                 {
-                    count += child.SpawnMinimally(lstVectorsInSphere, measure, strategy);
+                    List<System.Threading.Tasks.Task> lstTasks = new List<System.Threading.Tasks.Task>();
+                    foreach (Sphere<L> child in this.Children)
+                    {
+                        lstTasks.Add(System.Threading.Tasks.Task.Factory.StartNew(() =>
+                        {
+                            count += child.SpawnMinimally(lstVectorsInSphere, measure, strategy, ParallelStrategy.SingleThreadSpawn);
+                        }, System.Threading.Tasks.TaskCreationOptions.LongRunning));
+                    }
+
+                    System.Threading.Tasks.Task.WaitAll(lstTasks.ToArray());
+                }
+                else
+                {
+                    foreach (Sphere<L> child in this.Children)
+                    {
+                        count += child.SpawnMinimally(lstVectorsInSphere, measure, strategy, parallelStrategy);
+                    }
                 }
             }
 
@@ -652,7 +700,7 @@ namespace RHCLib
             return count;
         }
 
-        public virtual int SpawnMinimallyUsingDifferentLabel(IEnumerable<LabeledVector<L>> vectors, DistanceDelegate measure, ChildDoesNotEncloseAnyStrategy strategy)
+        public virtual int SpawnMinimallyUsingDifferentLabel(IEnumerable<LabeledVector<L>> vectors, DistanceDelegate measure, ChildDoesNotEncloseAnyStrategy strategy, ParallelStrategy parallelStrategy)
         {
             int count = 0;
 
@@ -662,9 +710,25 @@ namespace RHCLib
 
             if (lstVectorsInSphere.Any())
             {
-                foreach (Sphere<L> child in this.Children)
+                if (parallelStrategy == ParallelStrategy.MultithreadedSpawn)
                 {
-                    count += child.SpawnMinimallyUsingDifferentLabel(lstVectorsInSphere, measure, strategy);
+                    List<System.Threading.Tasks.Task> lstTasks = new List<System.Threading.Tasks.Task>();
+                    foreach (Sphere<L> child in this.Children)
+                    {
+                        lstTasks.Add(System.Threading.Tasks.Task.Factory.StartNew(() =>
+                        {
+                            count += child.SpawnMinimallyUsingDifferentLabel(lstVectorsInSphere, measure, strategy, ParallelStrategy.SingleThreadSpawn);
+                        }, System.Threading.Tasks.TaskCreationOptions.LongRunning));
+                    }
+
+                    System.Threading.Tasks.Task.WaitAll(lstTasks.ToArray());
+                }
+                else
+                {
+                    foreach (Sphere<L> child in this.Children)
+                    {
+                        count += child.SpawnMinimallyUsingDifferentLabel(lstVectorsInSphere, measure, strategy, parallelStrategy);
+                    }
                 }
             }
 
@@ -783,6 +847,12 @@ namespace RHCLib
     {
         OnlyApplyLDAIfNoChildren,
         AlwaysTryToApply
+    }
+
+    public enum ParallelStrategy
+    {
+        MultithreadedSpawn,
+        SingleThreadSpawn
     }
 
     public enum EncapsulateAllStrategy

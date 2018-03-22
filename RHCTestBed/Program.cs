@@ -32,6 +32,7 @@ namespace RHCTestBed
         static void Main(string[] args)
         {
             DataSet dataSet;
+            ParallelStrategy parallelStrategy = ParallelStrategy.SingleThreadSpawn;
 
             string strInput;
             int nInput;
@@ -47,6 +48,22 @@ namespace RHCTestBed
                 strInput = Console.ReadLine();
             } while (!int.TryParse(strInput, out nInput) || !Enum.GetValues(typeof(DataSet)).OfType<DataSet>().Select(ds => (int)ds).Contains(nInput));
             dataSet = (DataSet)nInput;
+
+            Dictionary<BenchmarkAlgorithm, List<RunStatistics>> dictResults = new Dictionary<BenchmarkAlgorithm, List<RunStatistics>>();
+            foreach (BenchmarkAlgorithm algorithm in Program.AcquireAlgorithmBenchmarkSet())
+            {
+                dictResults.Add(algorithm, new List<RunStatistics>());
+            }
+
+            if (dictResults.Any(ba => ba.Key.HasAttributeOfType<IsRHCSphereBenchmarkAttribute>()))
+            {
+                do
+                {
+                    Console.WriteLine("At least one algorithm is RHC based, would you like to try to expedite the spawning process by offloading the spawning over many cores (Note: For small datasets or hierarchies, this MAY impede training time because of the overhead with threads)? (Y or N)");
+                    strInput = Console.ReadLine().ToUpper();
+                } while (strInput != "Y" && strInput != "N");
+                parallelStrategy = strInput == "Y" ? ParallelStrategy.MultithreadedSpawn : ParallelStrategy.SingleThreadSpawn;
+            }
 
             do
             {
@@ -213,7 +230,7 @@ namespace RHCTestBed
                                     else
                                     {
                                         return Convert.ToDouble(s);
-                                    }                                    
+                                    }
                                 }),
                                 new Importer.ValueConverterHandler<double>((s, i) =>
                                 {
@@ -382,22 +399,10 @@ namespace RHCTestBed
 
             Debug.Assert(lstAllTrain.Count == lstAllTest.Count);
 
-            Dictionary<BenchmarkAlgorithm, List<RunStatistics>> dictResults = new Dictionary<BenchmarkAlgorithm, List<RunStatistics>>();
-            foreach (BenchmarkAlgorithm algorithm in Enum.GetValues(typeof(BenchmarkAlgorithm)))
-            {
-                if (!algorithm.HasAttributeOfType<ObsoleteAttribute>())
-                {
-                    //if (algorithm.HasAttributeOfType<IsRHCSphereBenchmarkAttribute>())
-                    {
-                        dictResults.Add(algorithm, new List<RunStatistics>());
-                    }
-                }
-            }
-
             for (int i = 0; i < lstAllTrain.Count; i++)
             {
                 Console.WriteLine("ITERATION: {0}", i);
-                
+
                 IList<LabeledVector<double>> lstTrain = lstAllTrain[i];
                 IList<LabeledVector<double>> lstTest = lstAllTest[i];
 
@@ -405,7 +410,7 @@ namespace RHCTestBed
                 {
                     Console.WriteLine("  - {0}", algorithm);
 
-                    dictResults[algorithm].Add(Program.Benchmark(lstTrain, lstTest, algorithm));
+                    dictResults[algorithm].Add(Program.Benchmark(lstTrain, lstTest, algorithm, parallelStrategy));
                 }
             }
 
@@ -464,7 +469,59 @@ namespace RHCTestBed
             Console.ReadKey();
         }
 
-        public static RunStatistics Benchmark<L>(IList<LabeledVector<L>> lstTrain, IList<LabeledVector<L>> lstTest, BenchmarkAlgorithm algorithm)
+        public static List<BenchmarkAlgorithm> AcquireAlgorithmBenchmarkSet()
+        {
+            List<BenchmarkAlgorithm> lstAlgorithms = new List<BenchmarkAlgorithm>();
+
+            bool shouldContinue = true;
+            do
+            {
+                Console.WriteLine("What algorithms would you like to benchmark?");
+                Console.WriteLine();
+
+                foreach (BenchmarkAlgorithm algorithm in Enum.GetValues(typeof(BenchmarkAlgorithm)))
+                {
+                    if (!lstAlgorithms.Contains(algorithm) && !algorithm.HasAttributeOfType<ObsoleteAttribute>())
+                    {
+                        Console.WriteLine("{0}: {1}", (int)algorithm, algorithm);
+                    }
+                }
+                Console.WriteLine("A: All");
+                Console.WriteLine();
+                Console.WriteLine("D: Done");
+
+                string input = Console.ReadLine().ToUpper().Trim();
+                int inputAsInt;
+                if (input == "A")
+                {
+                    foreach (BenchmarkAlgorithm algorithm in Enum.GetValues(typeof(BenchmarkAlgorithm)))
+                    {
+                        if (!lstAlgorithms.Contains(algorithm) && !algorithm.HasAttributeOfType<ObsoleteAttribute>())
+                        {
+                            lstAlgorithms.Add(algorithm);
+                        }
+                    }
+
+                    shouldContinue = false;
+                }
+                else if (input == "D")
+                {
+                    shouldContinue = false;
+                }
+                else if (int.TryParse(input, out inputAsInt) && Enum.IsDefined(typeof(BenchmarkAlgorithm), inputAsInt) && !lstAlgorithms.Contains((BenchmarkAlgorithm)inputAsInt) && !((BenchmarkAlgorithm)inputAsInt).HasAttributeOfType<ObsoleteAttribute>())
+                {
+                    lstAlgorithms.Add((BenchmarkAlgorithm)inputAsInt);
+                }
+                else
+                {
+                    Console.WriteLine("Invalid selection.  Try again.");
+                }
+            } while (shouldContinue);
+
+            return lstAlgorithms;
+        }
+
+        public static RunStatistics Benchmark<L>(IList<LabeledVector<L>> lstTrain, IList<LabeledVector<L>> lstTest, BenchmarkAlgorithm algorithm, ParallelStrategy parallelStrategy)
         {
             IsRHCSphereBenchmarkAttribute attribute = algorithm.GetAttributeOfType<IsRHCSphereBenchmarkAttribute>();
             if (attribute != null)
@@ -482,19 +539,19 @@ namespace RHCTestBed
                 {
                     switch (algorithm)
                     {
-                        case BenchmarkAlgorithm.Euclidean:
-                        case BenchmarkAlgorithm.SquaredEuclidean:
-                            spawnCount = sphere.Spawn(lstTrain, measure, ChildDoesNotEncloseAnyStrategy.FurthestVectorSpawns);
+                        case BenchmarkAlgorithm.RHCEuclidean:
+                        case BenchmarkAlgorithm.RHCSquaredEuclidean:
+                            spawnCount = sphere.Spawn(lstTrain, measure, ChildDoesNotEncloseAnyStrategy.FurthestVectorSpawns, parallelStrategy);
                             break;
-                        case BenchmarkAlgorithm.LDASquaredEuclidean:
-                        case BenchmarkAlgorithm.LDAEuclidean:
-                            spawnCount = sphere.SpawnWithLDA(lstTrain, measure, ChildDoesNotEncloseAnyStrategy.FurthestVectorSpawns, LDAStrategy.OnlyApplyLDAIfNoChildren);
+                        case BenchmarkAlgorithm.RHCLDASquaredEuclidean:
+                        case BenchmarkAlgorithm.RHCLDAEuclidean:
+                            spawnCount = sphere.SpawnWithLDA(lstTrain, measure, ChildDoesNotEncloseAnyStrategy.FurthestVectorSpawns, LDAStrategy.OnlyApplyLDAIfNoChildren, parallelStrategy);
                             break;
-                        case BenchmarkAlgorithm.DisjointMidpoint:
-                            spawnCount = sphere.SpawnMinimally(lstTrain, measure, ChildDoesNotEncloseAnyStrategy.FurthestVectorSpawns);
+                        case BenchmarkAlgorithm.RHCDisjointMidpoint:
+                            spawnCount = sphere.SpawnMinimally(lstTrain, measure, ChildDoesNotEncloseAnyStrategy.FurthestVectorSpawns, parallelStrategy);
                             break;
-                        case BenchmarkAlgorithm.MaxMargin:
-                            spawnCount = sphere.SpawnMinimallyUsingDifferentLabel(lstTrain, measure, ChildDoesNotEncloseAnyStrategy.FurthestVectorSpawns);
+                        case BenchmarkAlgorithm.RHCMaxMargin:
+                            spawnCount = sphere.SpawnMinimallyUsingDifferentLabel(lstTrain, measure, ChildDoesNotEncloseAnyStrategy.FurthestVectorSpawns, parallelStrategy);
                             break;
                         default:
                             throw new NotImplementedException();
@@ -611,7 +668,7 @@ namespace RHCTestBed
                             return new RunStatistics((double)nCorrect / lstTest.Count, trainTime, lstTestTimes);
                         }
 
-                        #endregion
+                    #endregion
                     case BenchmarkAlgorithm.SVM:
                         #region SVM
                         {
@@ -788,7 +845,7 @@ namespace RHCTestBed
                             return new RunStatistics((double)nCorrect / lstTest.Count, trainTime, lstTestTimes);
                         }
 
-                        #endregion
+                    #endregion
                     default:
                         throw new NotImplementedException();
                 }
@@ -904,17 +961,17 @@ namespace RHCTestBed
     public enum BenchmarkAlgorithm
     {
         [IsRHCSphereBenchmark(false)]
-        Euclidean,
+        RHCEuclidean,
         [IsRHCSphereBenchmark]
-        SquaredEuclidean,
+        RHCSquaredEuclidean,
         [IsRHCSphereBenchmark]
-        LDASquaredEuclidean,
+        RHCLDASquaredEuclidean,
         [IsRHCSphereBenchmark(false)]
-        LDAEuclidean,
+        RHCLDAEuclidean,
         [IsRHCSphereBenchmark]
-        DisjointMidpoint,
+        RHCDisjointMidpoint,
         [IsRHCSphereBenchmark]
-        MaxMargin,
+        RHCMaxMargin,
         BPNN,
         SVM,
         [Obsolete]
@@ -976,7 +1033,7 @@ namespace RHCTestBed
             {
                 double fAverage = values.Average();
                 double fSum = values.Sum(v => Math.Pow(v - fAverage, 2));
-                
+
                 fStdDev = Math.Sqrt((fSum) / (values.Count() - 1));
             }
 
