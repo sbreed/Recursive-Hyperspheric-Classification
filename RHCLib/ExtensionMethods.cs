@@ -98,13 +98,13 @@ namespace RHCLib
             }
         }
 
-        public static void Recognize<L>(this Sphere<L> sphere, IEnumerable<IVector> vectors, DistanceDelegate measure)
+        public static void Recognize<L>(this Sphere<L> sphere, IEnumerable<IVector> vectors, DistanceDelegate measure, ParallelStrategy parallelStrategy)
         {
             int nCorrect, nIncorrect;
-            ExtensionMethods.Recognize(sphere, vectors, measure, out nCorrect, out nIncorrect);
+            ExtensionMethods.Recognize(sphere, vectors, measure, parallelStrategy, out nCorrect, out nIncorrect);
         }
 
-        public static void Recognize<L>(this Sphere<L> sphere, IEnumerable<IVector> vectors, DistanceDelegate measure, out int nCorrect, out int nIncorrect)
+        public static void Recognize<L>(this Sphere<L> sphere, IEnumerable<IVector> vectors, DistanceDelegate measure, ParallelStrategy parallelStrategy, out int nCorrect, out int nIncorrect)
         {
             nCorrect = 0;
             nIncorrect = 0;
@@ -115,7 +115,7 @@ namespace RHCLib
 
             foreach (IVector vector in vectors)
             {
-                label = sphere.RecognizeAsLabel(vector, measure);
+                label = sphere.RecognizeAsLabel(vector, measure, parallelStrategy);
 
                 System.Diagnostics.Debug.WriteLine(string.Format("Vector {0}:: Recognized Label: {1}{2}", nCurrentVector, label, vector is LabeledVector<L> ? string.Format(" | Actual Label: {0}", ((LabeledVector<L>)vector).Label) : string.Empty));
 

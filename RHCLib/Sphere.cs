@@ -200,12 +200,12 @@ namespace RHCLib
             System.Diagnostics.Debug.WriteLine(sb.ToString());
         }
 
-        public virtual L RecognizeAsLabel(IVector vector, DistanceDelegate measure)
+        public virtual L RecognizeAsLabel(IVector vector, DistanceDelegate measure, ParallelStrategy parallelStrategy)
         {
-            return this.Recognize(vector, measure).Label;
+            return this.Recognize(vector, measure, parallelStrategy).Label;
         }
 
-        public virtual Sphere<L> Recognize(IVector vector, DistanceDelegate measure)
+        public virtual Sphere<L> Recognize(IVector vector, DistanceDelegate measure, ParallelStrategy parallelStrategy)
         {
             Sphere<L> sphereMinRadius = this.Parent == null ? this : null;
 
@@ -218,12 +218,37 @@ namespace RHCLib
                 else
                 {
                     sphereMinRadius = this;
-                    Sphere<L> sphereCandidate = null;
-                    foreach (Sphere<L> child in this.Children)
+                    Sphere<L> sphereCandidate;
+                    if (parallelStrategy == ParallelStrategy.Multithreaded)
                     {
-                        if ((sphereCandidate = child.Recognize(vector, measure)) != null && sphereCandidate.Radius < sphereMinRadius.Radius)
+                        List<System.Threading.Tasks.Task> lstTasks = new List<System.Threading.Tasks.Task>();
+                        object compLock = new object();
+
+                        foreach (Sphere<L> child in this.Children)
                         {
-                            sphereMinRadius = sphereCandidate;
+                            lstTasks.Add(System.Threading.Tasks.Task.Factory.StartNew(() =>
+                            {
+                                sphereCandidate = child.Recognize(vector, measure, ParallelStrategy.SingleThreaded);
+                                lock (compLock)
+                                {
+                                    if (sphereCandidate != null && sphereCandidate.Radius < sphereMinRadius.Radius)
+                                    {
+                                        sphereMinRadius = sphereCandidate;
+                                    }
+                                }
+                            }, System.Threading.Tasks.TaskCreationOptions.LongRunning));
+                        }
+
+                        System.Threading.Tasks.Task.WaitAll(lstTasks.ToArray());
+                    }
+                    else
+                    {
+                        foreach (Sphere<L> child in this.Children)
+                        {
+                            if ((sphereCandidate = child.Recognize(vector, measure, ParallelStrategy.SingleThreaded)) != null && sphereCandidate.Radius < sphereMinRadius.Radius)
+                            {
+                                sphereMinRadius = sphereCandidate;
+                            }
                         }
                     }
                 }
@@ -399,15 +424,15 @@ namespace RHCLib
 
             if (lstVectorsInSphere.Any())
             {
-                if (parallelStrategy == ParallelStrategy.MultithreadedSpawn)
+                if (parallelStrategy == ParallelStrategy.Multithreaded)
                 {
                     List<System.Threading.Tasks.Task> lstTasks = new List<System.Threading.Tasks.Task>();
                     foreach (Sphere<L> child in this.Children)
                     {
-                        lstTasks.Add(System.Threading.Tasks.Task.Factory.StartNew(() =>
+                        lstTasks.Add(System.Threading.Tasks.Task.Factory.StartNew(c =>
                         {
-                            count += child.Spawn(lstVectorsInSphere, measure, strategy, ParallelStrategy.SingleThreadSpawn);
-                        }, System.Threading.Tasks.TaskCreationOptions.LongRunning));
+                            count += ((Sphere<L>)c).Spawn(lstVectorsInSphere, measure, strategy, ParallelStrategy.SingleThreaded);
+                        }, child, System.Threading.Tasks.TaskCreationOptions.LongRunning));
                     }
 
                     System.Threading.Tasks.Task.WaitAll(lstTasks.ToArray());
@@ -502,15 +527,15 @@ namespace RHCLib
 
             if (lstVectorsInSphere.Any())
             {
-                if (parallelStrategy == ParallelStrategy.MultithreadedSpawn)
+                if (parallelStrategy == ParallelStrategy.Multithreaded)
                 {
                     List<System.Threading.Tasks.Task> lstTasks = new List<System.Threading.Tasks.Task>();
                     foreach (Sphere<L> child in this.Children)
                     {
-                        lstTasks.Add(System.Threading.Tasks.Task.Factory.StartNew(() =>
+                        lstTasks.Add(System.Threading.Tasks.Task.Factory.StartNew(c =>
                         {
-                            count += child.SpawnWithLDA(lstVectorsInSphere, measure, strategy, ldaStrategy, ParallelStrategy.SingleThreadSpawn);
-                        }, System.Threading.Tasks.TaskCreationOptions.LongRunning));
+                            count += ((Sphere<L>)c).SpawnWithLDA(lstVectorsInSphere, measure, strategy, ldaStrategy, ParallelStrategy.SingleThreaded);
+                        }, child, System.Threading.Tasks.TaskCreationOptions.LongRunning));
                     }
 
                     System.Threading.Tasks.Task.WaitAll(lstTasks.ToArray());
@@ -614,15 +639,15 @@ namespace RHCLib
 
             if (lstVectorsInSphere.Any())
             {
-                if (parallelStrategy == ParallelStrategy.MultithreadedSpawn)
+                if (parallelStrategy == ParallelStrategy.Multithreaded)
                 {
                     List<System.Threading.Tasks.Task> lstTasks = new List<System.Threading.Tasks.Task>();
                     foreach (Sphere<L> child in this.Children)
                     {
-                        lstTasks.Add(System.Threading.Tasks.Task.Factory.StartNew(() =>
+                        lstTasks.Add(System.Threading.Tasks.Task.Factory.StartNew(c =>
                         {
-                            count += child.SpawnMinimally(lstVectorsInSphere, measure, strategy, ParallelStrategy.SingleThreadSpawn);
-                        }, System.Threading.Tasks.TaskCreationOptions.LongRunning));
+                            count += ((Sphere<L>)c).SpawnMinimally(lstVectorsInSphere, measure, strategy, ParallelStrategy.SingleThreaded);
+                        }, child, System.Threading.Tasks.TaskCreationOptions.LongRunning));
                     }
 
                     System.Threading.Tasks.Task.WaitAll(lstTasks.ToArray());
@@ -710,15 +735,15 @@ namespace RHCLib
 
             if (lstVectorsInSphere.Any())
             {
-                if (parallelStrategy == ParallelStrategy.MultithreadedSpawn)
+                if (parallelStrategy == ParallelStrategy.Multithreaded)
                 {
                     List<System.Threading.Tasks.Task> lstTasks = new List<System.Threading.Tasks.Task>();
                     foreach (Sphere<L> child in this.Children)
                     {
-                        lstTasks.Add(System.Threading.Tasks.Task.Factory.StartNew(() =>
+                        lstTasks.Add(System.Threading.Tasks.Task.Factory.StartNew(c =>
                         {
-                            count += child.SpawnMinimallyUsingDifferentLabel(lstVectorsInSphere, measure, strategy, ParallelStrategy.SingleThreadSpawn);
-                        }, System.Threading.Tasks.TaskCreationOptions.LongRunning));
+                            count += ((Sphere<L>)c).SpawnMinimallyUsingDifferentLabel(lstVectorsInSphere, measure, strategy, ParallelStrategy.SingleThreaded);
+                        }, child, System.Threading.Tasks.TaskCreationOptions.LongRunning));
                     }
 
                     System.Threading.Tasks.Task.WaitAll(lstTasks.ToArray());
@@ -851,8 +876,8 @@ namespace RHCLib
 
     public enum ParallelStrategy
     {
-        MultithreadedSpawn,
-        SingleThreadSpawn
+        Multithreaded,
+        SingleThreaded
     }
 
     public enum EncapsulateAllStrategy

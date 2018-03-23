@@ -32,7 +32,7 @@ namespace RHCTestBed
         static void Main(string[] args)
         {
             DataSet dataSet;
-            ParallelStrategy parallelStrategy = ParallelStrategy.SingleThreadSpawn;
+            ParallelStrategy parallelStrategy = ParallelStrategy.SingleThreaded;
 
             string strInput;
             int nInput;
@@ -62,7 +62,7 @@ namespace RHCTestBed
                     Console.WriteLine("At least one algorithm is RHC based, would you like to try to expedite the spawning process by offloading the spawning over many cores (Note: For small datasets or hierarchies, this MAY impede training time because of the overhead with threads)? (Y or N)");
                     strInput = Console.ReadLine().ToUpper();
                 } while (strInput != "Y" && strInput != "N");
-                parallelStrategy = strInput == "Y" ? ParallelStrategy.MultithreadedSpawn : ParallelStrategy.SingleThreadSpawn;
+                parallelStrategy = strInput == "Y" ? ParallelStrategy.Multithreaded : ParallelStrategy.SingleThreaded;
             }
 
             do
@@ -569,7 +569,7 @@ namespace RHCTestBed
                 foreach (LabeledVector<L> vector in lstTest)
                 {
                     watch = Stopwatch.StartNew();
-                    L label = sphere.RecognizeAsLabel(vector, measure);
+                    L label = sphere.RecognizeAsLabel(vector, measure, ParallelStrategy.Multithreaded);
                     watch.Stop();
 
                     nCorrect += vector.Label.Equals(label) ? 1 : 0;
