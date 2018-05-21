@@ -8,7 +8,6 @@ namespace RHCLib
     public class Sphere<L> : LabeledVector<L>
     {
         private readonly List<Sphere<L>> m_lstChildren = new List<Sphere<L>>();
-        private Discriminant<L> m_discriminant = null;
 
         public Sphere(double fRadius, L label, IEnumerable<double> features)
             : base(label, features)
@@ -211,9 +210,9 @@ namespace RHCLib
 
             if (this.DoesEncloseVector(vector, measure))
             {
-                if (this.m_discriminant != null)
+                if (this.Discriminant != null)
                 {
-                    sphereMinRadius = this.m_discriminant.CreatePseudoSphere(vector);
+                    sphereMinRadius = this.Discriminant.CreatePseudoSphere(vector);
                 }
                 else
                 {
@@ -222,21 +221,21 @@ namespace RHCLib
                     if (parallelStrategy == ParallelStrategy.Multithreaded)
                     {
                         List<System.Threading.Tasks.Task> lstTasks = new List<System.Threading.Tasks.Task>();
-                        object compLock = new object();
+                        object key = new object();
 
                         foreach (Sphere<L> child in this.Children)
                         {
-                            lstTasks.Add(System.Threading.Tasks.Task.Factory.StartNew(() =>
+                            lstTasks.Add(System.Threading.Tasks.Task.Factory.StartNew(c =>
                             {
-                                sphereCandidate = child.Recognize(vector, measure, ParallelStrategy.SingleThreaded);
-                                lock (compLock)
+                                sphereCandidate = ((Sphere<L>)c).Recognize(vector, measure, ParallelStrategy.SingleThreaded);
+                                lock (key)
                                 {
                                     if (sphereCandidate != null && sphereCandidate.Radius < sphereMinRadius.Radius)
                                     {
                                         sphereMinRadius = sphereCandidate;
                                     }
                                 }
-                            }, System.Threading.Tasks.TaskCreationOptions.LongRunning));
+                            }, child, System.Threading.Tasks.TaskCreationOptions.LongRunning));
                         }
 
                         System.Threading.Tasks.Task.WaitAll(lstTasks.ToArray());
@@ -554,27 +553,31 @@ namespace RHCLib
             List<LabeledVector<L>> lstVectorsNotInChildren = this.GetVectorsNotInChildren(lstVectorsInSphere.Cast<IVector>(), measure).Cast<LabeledVector<L>>().ToList();
             IDictionary<L, IEnumerable<LabeledVector<L>>> dictVectorsNotInChildren = LabeledVector<L>.SeparateIntoClasses(lstVectorsNotInChildren);
 
-            if (dictVectorsNotInChildren.Count == 2 && this.m_discriminant == null && (ldaStrategy == LDAStrategy.AlwaysTryToApply || !this.Children.Any()))
+            if (dictVectorsNotInChildren.Count == 2 && this.Discriminant == null && (ldaStrategy == LDAStrategy.AlwaysTryToApply || !this.Children.Any()))
             {
-                #region Try to Create Discriminant if the space is completely separable
-
-                Discriminant<L> discriminant;
-                try
+                // Projections when using Squared Euclidean might not fall within boundaries of subspace after projection, so check first.
+                if (measure != Vector.SquaredEuclideanDistance || (vectors.All(v => measure(v, this) <= this.Radius)))
                 {
-                    if (LDA.IsCompletelySeparatedWithDiscriminant(dictVectorsNotInChildren.ElementAt(0).Value, dictVectorsNotInChildren.ElementAt(1).Value, this, out discriminant))
+                    #region Try to Create Discriminant if the space is completely separable
+
+                    Discriminant<L> discriminant;
+                    try
                     {
-                        this.m_discriminant = discriminant;
+                        if (LDA.IsCompletelySeparatedWithDiscriminant(dictVectorsNotInChildren.ElementAt(0).Value, dictVectorsNotInChildren.ElementAt(1).Value, this, out discriminant))
+                        {
+                            this.Discriminant = discriminant;
+                        }
                     }
-                }
-                catch
-                {
-                    // Just consume; it may not be able to compute the inverse of the scatter-within matrix.
-                }
+                    catch
+                    {
+                        // Just consume; it may not be able to compute the inverse of the scatter-within matrix.
+                    }
 
-                #endregion
+                    #endregion
+                }
             }
 
-            if (this.m_discriminant == null)
+            if (this.Discriminant == null)
             {
                 #region Spawn Regularly
 
@@ -824,6 +827,8 @@ namespace RHCLib
             }
         }
 
+        public Discriminant<L> Discriminant { get; set; }
+
         public int Height
         {
             get
@@ -896,10 +901,12 @@ namespace RHCLib
         private readonly L m_classLabelRightOfMidpoint;
         private readonly Sphere<L> m_parent;
 
-        public Discriminant(double[][] discriminant, double decisionPoint, L classLabelLeftOfMidpoint, L classLabelRightOfMidpoint, Sphere<L> parent)
+        public Discriminant(double[][] discriminant, double decisionPoint, double projectedMeanLeft, double projectedMeanRight, L classLabelLeftOfMidpoint, L classLabelRightOfMidpoint, Sphere<L> parent)
         {
             this.m_discriminantTransposed = LDA.MatrixTranspose(discriminant);
             this.m_fDecisionPoint = decisionPoint;
+            this.ProjectedMeanLeft = projectedMeanLeft;
+            this.ProjectMeanRight = ProjectMeanRight;
             this.m_classLabelLeftOfMidpoint = classLabelLeftOfMidpoint;
             this.m_classLabelRightOfMidpoint = classLabelRightOfMidpoint;
             this.m_parent = parent;
@@ -973,6 +980,18 @@ namespace RHCLib
             get
             {
                 return this.m_parent;
+            }
+        }
+
+        public virtual double ProjectedMeanLeft { get; set; }
+
+        public virtual double ProjectMeanRight { get; set; }
+
+        public virtual double[][] Transposed
+        {
+            get
+            {
+                return this.m_discriminantTransposed;
             }
         }
     }

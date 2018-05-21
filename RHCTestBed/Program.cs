@@ -465,8 +465,11 @@ namespace RHCTestBed
             #endregion
 
             Console.WriteLine();
-            Console.WriteLine("Press any key to continue...");
-            Console.ReadKey();
+            //Console.WriteLine("Press any key to continue...");
+            do
+            {
+                Console.WriteLine("Press 'Q' to quit...");
+            } while (Console.ReadLine().ToString().ToUpper() != "Q");
         }
 
         public static List<BenchmarkAlgorithm> AcquireAlgorithmBenchmarkSet()
@@ -569,7 +572,7 @@ namespace RHCTestBed
                 foreach (LabeledVector<L> vector in lstTest)
                 {
                     watch = Stopwatch.StartNew();
-                    L label = sphere.RecognizeAsLabel(vector, measure, ParallelStrategy.Multithreaded);
+                    L label = sphere.RecognizeAsLabel(vector, measure, parallelStrategy);
                     watch.Stop();
 
                     nCorrect += vector.Label.Equals(label) ? 1 : 0;

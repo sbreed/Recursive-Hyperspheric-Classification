@@ -145,7 +145,7 @@ namespace RHCLib
 
                 #endregion
 
-                discriminant = new Discriminant<L>(w, midpoint, m0Proj <= midpoint ? ds1.First().Label : ds2.First().Label, m0Proj <= midpoint ? ds2.First().Label : ds1.First().Label, sphere);
+                discriminant = new Discriminant<L>(w, midpoint, m0Proj <= midpoint ? m0Proj : MatrixProduct(wT, m1)[0][0], m0Proj > midpoint ? MatrixProduct(wT, m1)[0][0] : m0Proj, m0Proj <= midpoint ? ds1.First().Label : ds2.First().Label, m0Proj <= midpoint ? ds2.First().Label : ds1.First().Label, sphere);
                 return true;
             }
             else
